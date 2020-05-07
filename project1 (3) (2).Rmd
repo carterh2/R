@@ -1,0 +1,417 @@
+---
+title: "The International Effects of the Great Recession"
+author: "Charles Knipp & Carter Hogan"
+date: "4/21/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r packages, include=FALSE}
+library(fredr)
+library(dplyr)
+library(purrr)
+library(stringr)
+library(ggplot2)
+library(TTR)
+library(magrittr)
+library(ggpubr)
+library(gridExtra)
+```
+
+## Federal Reserve Economic Data
+
+Federal Reserve Economic Data (FRED) is maintained by the Saint Louis Federal Reserve Bank. FRED is updated on a daily basis and allows 24/7 access to a variety of financial and economic data series from more than 85 sources.
+
+Luckily some dedicated eocnomic data analysts decided to create an api to query, search, and pull any series on a whim.
+
+```{r data search}
+# youth unemployment rate to proxy actual unemplyment
+data = fredr_series_search_text(search_text="youth unemployment rate for")
+fredr_set_key('9c9998bd36a2bdbcf4e13c63b0a5edaf')
+series = data$id
+```
+
+### Navigating the Federal Reserve Economic Data API
+
+```{r query, echo=FALSE}
+data
+```
+
+Inititially I queried the data by category and decided to look under unemployment rates. This is all within the international indicators tab in order to proxy a countries success.
+
+This was to partly due to the number of countries that share this data in FRED; the time periods are relatively homogenous existing between 1991 and 2019, which gives us a better understanding of how some nations are doing relative to others.
+
+```{r, eval=FALSE}
+df1 = map_dfr(series[1:100],fredr)
+df2 = map_dfr(series[101:200],fredr)
+df3 = map_dfr(series[201:length(series)],fredr)
+```
+
+```{r data load,echo=FALSE}
+df = read.csv('/Users/charlesknipp/Documents/school/STP 494/project 1/df.csv')
+```
+
+To avoid the chance of an HTTP error `429: Too Many Requests. Exceeded Rate Limit`, we needed to split the query into 3 separate functions otherwise the data wouldn't load. Considering we found roughly 230 countries with this series, it is not surprising to see these kidns of errors.
+
+```{r dataframe management, eval=FALSE}
+df1 = df1 %>% 
+  filter(str_detect(df1$series_id,'SLUEM1524ZS')) %>% 
+  mutate(country=str_sub(series_id,start=-3))
+
+df2 = df2 %>% 
+  filter(str_detect(df2$series_id,'SLUEM1524ZS')) %>% 
+  mutate(country=str_sub(series_id,start=-3))
+
+df3 = df3 %>% 
+  filter(str_detect(df3$series_id,'SLUEM1524ZS')) %>% 
+  mutate(country=str_sub(series_id,start=-3))
+
+
+df = rbind(df1,df2)
+df = rbind(df,df3)
+```
+
+Once these separate queries are made, we construct one homogenized dataframe with all 226 countries and their respective series. This dataframe is shown below:
+
+```{r df, echo=FALSE}
+knitr::kable(head(df))
+```
+
+### Summarizing the Data
+
+To focus our analysis, we chose to select a few important world economies, but also want to look at those in which greatly struggled or thrived. As such, we sorted the data into the most volatile labor markets, in addition to those in a long term recession.
+
+In order to do this, we summarized the data by country and took selections based on the summary statistics. The result is an array with country names according to the established criteria.
+
+```{r summarize data}
+# find best
+summarize_df = df %>% 
+  group_by(country) %>% 
+  summarise(mean=mean(value),sd=sd(value),min=min(value),max=max(value)) %>%
+  arrange(sd)
+```
+
+
+```{r summary, include=FALSE}
+knitr::kable(summarize_df)
+```
+
+## Visualizing Summary Data
+
+We deided to look at the best and worst countries that experience the most volatile rates of unemployment during the recession times in addition to the median rates.
+
+### Unemployment by Volatility
+
+```{r plots 1}
+# find the worst off and the best off by deviation
+df_sd_worst = df %>% 
+  group_by(country) %>% 
+  summarise(sd=sd(value)) %>%
+  arrange(desc(sd),.by_group=TRUE)
+
+sd_worst = df_sd_worst$country[1:10]
+df_sdw = df %>% filter(country %in% sd_worst)
+
+df_sd_best = df %>% 
+  group_by(country) %>% 
+  summarise(sd=sd(value)) %>%
+  arrange(sd,.by_group=TRUE)
+
+sd_best = df_sd_best$country[1:10]
+df_sdb = df %>% filter(country %in% sd_best)
+
+# boxplots organized by standard deviation
+plot_sd1 = ggplot(df_sdw,aes(x=reorder(country,value),y=value)) +
+  geom_boxplot(aes(fill=reorder(country,value)),outlier.shape=NA) +
+  scale_fill_manual(values=topo.colors(10),guide=guide_legend('country')) +
+  xlab('country') +
+  ylab('unemployment') +
+  ggtitle('highest standard deviations')
+
+plot_sd2 = ggplot(df_sdb,aes(x=reorder(country,value),y=value)) +
+  geom_boxplot(aes(fill=reorder(country,value)),outlier.shape=NA) +
+  scale_fill_manual(values=topo.colors(10),guide=guide_legend('country')) +
+  xlab('country') +
+  ylab('unemployment') +
+  ggtitle('lowest standard deviations')
+```
+
+Countries with the lowest standard deviations exhibit a very linear path; unfortunately I was unable to sort by deviation, but it is a very pronounced path.
+
+In higher deviations this path is less pronounced, but the have much less of an IQR shown in the graph. These countries also tend to cluster in Eastern Europe very interestingly; which, in the case of Greece and Portugal, makes sense given the direction of their current regimes.
+
+```{r, echo=FALSE}
+id = c('GNB','GIN','BDI','VUT','ERI','CAF','NPL','HPC','MWI','COM')
+country = c('Guinea-Bissau','Guinea','Burundi','Vanuatu', 'Eritrea','Central Africa','Nepal','Indebted Countries', 'Malawi','Comoros')
+```
+:::: {style="display: flex;"}
+
+::: {}
+```{r, echo=FALSE}
+knitr::kable(cbind(id,country))
+```
+:::
+
+::: {}
+```{r, echo=FALSE}
+plot_sd2
+```
+:::
+
+::::
+```{r, echo=FALSE}
+id = c('ARM','ESP','GRC','GEO','PSE','DZA','MNE','CYP','LTU','PRT')
+country = c('Armenia','Spain','Greece','Georgia','Palestine','Algeria','Montenegro','Cyprus','Lithuania','Portugal')
+```
+:::: {style="display: flex;"}
+
+::: {}
+```{r, echo=FALSE}
+knitr::kable(cbind(id,country))
+```
+:::
+
+::: {}
+```{r, echo=FALSE}
+plot_sd1
+```
+:::
+
+::::
+
+### Unemployment by Median
+
+```{r plots 2}
+# find the worst off and the best off by median
+df_m_worst = df %>% 
+  group_by(country) %>% 
+  summarise(median=median(value)) %>%
+  arrange(desc(median),.by_group=TRUE)
+
+m_worst = df_m_worst$country[1:10]
+df_mw = df %>% filter(country %in% m_worst)
+
+df_m_best = df %>% 
+  group_by(country) %>% 
+  summarise(median=median(value)) %>%
+  arrange(median,.by_group=TRUE)
+
+m_best = df_m_best$country[1:10]
+df_mb = df %>% filter(country %in% m_best)
+
+# boxplots organized by median
+plot_m1 = ggplot(df_mw,aes(x=reorder(country,value),y=value)) +
+  geom_boxplot(aes(fill=reorder(country,value)),outlier.shape=NA) +
+  scale_fill_manual(values=topo.colors(10),guide=guide_legend('country')) +
+  xlab('country') +
+  ylab('unemployment') +
+  ggtitle('highest median values')
+
+plot_m2 = ggplot(df_mb,aes(x=reorder(country,value),y=value)) +
+  geom_boxplot(aes(fill=reorder(country,value)),outlier.shape=NA) +
+  scale_fill_manual(values=topo.colors(10),guide=guide_legend('country')) +
+  xlab('country') +
+  ylab('unemployment') +
+  ggtitle('lowest median values')
+
+```
+
+The countries with the lowest median unemployments are all clustered around 2.5% and the lowest of the pack have incredibly stable rates (very low standard deviations).
+
+There is also some overlap with the lowest deviations, which makes logical sense in the case for Burundi and Nepal. Likely, their populations are so small that unemployment is very stable and low.
+
+Countries with rather high median values share some qualities with the more volatile economies; however they tend to drift to higher means with only a few outliers that drag the overall employment down.
+
+```{r, echo=FALSE}
+id = c('PAK','RWA','MMR','KHM','BEN','TCD','NPL','LAO','BDI','NER')
+country = c('Pakistan','Rwanda','Myanmar','Cambodia','Benin','Chad','Nepal','Laos','Burundi','Niger')
+```
+:::: {style="display: flex;"}
+
+::: {}
+```{r, echo=FALSE}
+knitr::kable(cbind(id,country))
+```
+:::
+
+::: {}
+```{r, echo=FALSE}
+plot_m2
+```
+:::
+
+::::
+```{r, echo=FALSE}
+id = c('MKD','BIH','MNE','ZAF','SWZ','LBY','LSO','NAM','VCT','NCL')
+country = c('Macedonia','Bosnia','Montenegro','South Africa','Swaziland','Libya','Lesotho','Namibia','The Grenadines','New Caledonia')
+```
+:::: {style="display: flex;"}
+
+::: {}
+```{r, echo=FALSE}
+knitr::kable(cbind(id,country))
+```
+:::
+
+::: {}
+```{r, echo=FALSE}
+plot_m1
+```
+:::
+
+::::
+
+### Time Series of Countries with Highest Median Unemployment
+
+The time series for countries with the highest median unemployment rate relative to the other countries is very sporadic. There is a noticeable increase just before 2010 which is in-line with the timing of the Great Recession.  Most of these countries were seeing a small decrease in youth unemployment just before the recession but it immediately turns around. This time series roughly shows countries with median youth unemployment rates of above thirty percent.
+
+```{r lmedian ts, echo = F}
+df_mw$date = as.Date(df_mw$date)
+
+plot_ts1 = ggplot(df_mw,aes(x=date,y=value)) + 
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment') +
+  ggtitle('time series by high median unemployment')
+```
+```{r, echo=FALSE}
+plot_ts1
+```
+
+### Time Series of Countries with Lowest Median Unemployment
+
+A stark contrast to the countries with the highest unemployment rate is the countries with the lowest. We can see that the standard deviation of these countries is already noticeably narrower as not many lines vary as drastically as the previous plot. It is also worth mentioning that these countries too saw increases in youth unemployment at the 2008-2010 starting point of the Great Recession. 
+
+```{r hmedian ts, echo = FALSE}
+df_mb$date = as.Date(df_mb$date)
+
+plot_ts2 = ggplot(df_mb,aes(x=date,y=value)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment') +
+  ggtitle('time series by low median unemployment')
+```
+
+
+```{r, echo=FALSE}
+plot_ts2
+```
+
+### Time Series of Countries with the Highest Standard Deviation in their Unemployment Rate
+
+The graph showing the countries with the highest standard deviations reveals that their unemployment rates increased severely during the recession in comparison to the countries with a more stable unemployment rate. While this may seem intuitive, the impacts of a recession are often widespread and hard to predict, that being said the relationship between unemployment and the timing of the Great Recession is supported by this data.
+
+```{r highsd ts, echo=FALSE}
+df_sdw$date = as.Date(df_sdw$date)
+
+plot_ts4 = ggplot(df_sdw,aes(x=date,y=value)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment') +
+  ggtitle('time series by high volatility unemployment')
+```
+
+
+```{r, echo=FALSE}
+plot_ts4
+```
+
+### Time Series of Countries with the Lowest Standard Deviation in their Unemployment Rate
+
+Another question is do the countries with more stable unemployment rates fair better during the Great Recession. Well the plot shows that although there may be an acute rise in the youth unemployment rate around 2008-2010 this is not near as drastic as an increase as countries with a lower median unemployment rate. This is interesting to see as, normal fluctuations being smaller than other countries the impact of the recession is smaller.
+
+```{r lowsd ts, echo=F}
+df_sdb$date = as.Date(df_sdb$date)
+
+plot_ts3 = ggplot(df_sdb,aes(x=date,y=value)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment') +
+  ggtitle('time series by low volatility unemployment')
+```
+
+
+```{r, echo=FALSE}
+plot_ts3
+```
+
+
+### Time Series Analyis Youth Unemployment Rate in the United States
+
+Removing the trend from the time series is an important aspect of understanding what the nature of the rise in unemployment is due to. This could be a plethora of things from seasonal lay-offs to kids going back to college, or a virus keeping them home. Whatever the case it is done by subtracting the moving average of individual countries unemployment rates. For the United States we can see that the Great Recession is reflected by the arc-like curve in the unemployment rate. This comparison helps us understand the nature of unemployment around this time.
+
+```{r}
+dftsUS = df %>% filter(country=='USA')
+dftsUS$dpo = DPO(dftsUS$value)
+dftsUS$date = as.Date(dftsUS$date)
+dftsUS = na.omit(dftsUS)
+
+tsplot1 = ggplot(dftsUS,aes(x=date,y=value-dpo)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('')
+
+tsplot2 = ggplot(dftsUS,aes(x=date,y=dpo)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment rate')
+
+tsplot3 = ggplot(dftsUS,aes(x=date,y=value)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('')
+```
+
+
+```{r, echo=FALSE}
+figure = ggarrange(
+  tsplot1, tsplot2, tsplot3,
+  labels = c("Detrended", "The Trend", "Time Series"),
+  ncol = 1,
+  nrow = 3
+)
+
+figure
+```
+
+### Time Series Analysis on Youth Unemployment Rate in China
+
+Removing the trend from China’s unemployment rate, it can be seen that China’s youth unemployment is very much on the rise since 1990, and that there is little fluctuation around the time of the Great Recession. This could be due to the fact that China was not as affected as the U.S. by the housing market crash. This is only sensible considering it was U.S. related mortgage-backed securities that caused the crash.
+
+```{r}
+dftsCH = df %>% filter(country=='CHN')
+dftsCH$dpo = DPO(dftsCH$value)
+dftsCH$date = as.Date(dftsCH$date)
+dftsCH = na.omit(dftsCH)
+
+tsplot4 = ggplot(dftsCH,aes(x=date,y=value-dpo)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('')
+
+tsplot5 = ggplot(dftsCH,aes(x=date,y=dpo)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('unemployment rate')
+
+tsplot6 = ggplot(dftsCH,aes(x=date,y=value)) +
+  geom_line(aes(color=country)) +
+  xlab('time (years)') +
+  ylab('')
+```
+
+
+```{r, echo=FALSE}
+figure = ggarrange(
+  tsplot4, tsplot5, tsplot6,
+  labels = c("Detrended", "The Trend", "Time Series"),
+  ncol = 1,
+  nrow = 3
+)
+
+figure
+```

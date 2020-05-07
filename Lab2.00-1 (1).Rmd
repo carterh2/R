@@ -1,0 +1,148 @@
+---
+title: "Lab2"
+author: "Carter Hogan"
+date: "3/16/2020"
+output: pdf_document
+fig_crop: no
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2movies)
+library(ggplot2)
+library(dplyr)
+data(movies)
+attach(movies)
+```
+
+# Question 1
+    The Range of movie years is 1893-2005.
+```{r fig.align="center"}
+newestmovieyear <-max(year)
+oldestmovieyear <- min(year)
+rangeofmovieyears <- range(oldestmovieyear:newestmovieyear)
+print(rangeofmovieyears)
+
+```
+
+# Question 2
+  Only 8.87% of Movies in this data set have an observed budget while 91.13% of movies in this data set don't have an observed budget. _Spider-Man 2_, _Titanic_, _Troy_, _Terminator 3: Rise of the Machines_ and _Waterworld_ have the largest budgets with $200,000,000, $200,000,000, $185,000,000, $175,000,000 and $175,000,000 being the budgets respectively. 
+```{r fig.align="center"}
+summovieswbudget <- sum(!is.na(budget))
+summovieswithout <- sum(is.na(budget))
+PropMoviesWithBudget <- (summovieswbudget/(summovieswithout+summovieswbudget))
+PropMoviesWithoutBudget <- (summovieswithout/(summovieswithout+summovieswbudget))
+print(PropMoviesWithBudget)
+print(PropMoviesWithoutBudget)
+movies <- arrange(movies, desc(budget))
+select(movies[1:5,], c(title,budget))
+```
+
+\newpage
+
+## Question 3
+_The Cure for Insomnia_, _The Longest Most Meaningless Movie in the World_, _Four Stars_, _Resan_,and _Out 1_ are the five longest movies.  
+```{r fig.align="center"}
+movies <- arrange(movies, desc(length))
+select(movies[1:5,], c(title,length))
+```
+
+# Question 4
+  The shortest short movie is a list of Short movies that all have a duration of one minute starting with Pulp Diction. The longest short movie is _10 Jaar Leuven Kort_ with a duration of 240 minutes.
+```{r  fig.align="center"}
+shortmovies <- movies %>%
+  filter(length==1 & Short==1)
+shortestshortmovie <- select(shortmovies, title, length, Short)
+print(shortestshortmovie)
+movies<-arrange(movies, desc(Short), desc(length))
+
+longestshortmovie <- movies %>%  
+arrange(desc(Short), desc(length)) %>%  
+select(title, length, Short) %>%  
+head(1)
+print(longestshortmovie)
+```
+\newpage
+# Question 5
+  The graph displays  how many movies of each genre are in this data base with a "None" bar representing unnasigned movies and a "Mixed" bar for movies that have more than one genre. 
+```{r fig.align="center"}
+movies <- na.omit(movies)
+genre <- rep(NA, nrow(movies))
+count <- rowSums(movies[, 18:24])
+genre[which(count < 1)] = "None"
+genre[which(count == 1 & movies$Action == 1)] = "Action"
+genre[which(count == 1 & movies$Animation == 1)] = "Animation"
+genre[which(count == 1 & movies$Comedy == 1)] = "Comedy"
+genre[which(count == 1 & movies$Drama == 1)] = "Drama"
+genre[which(count == 1 & movies$Documentary == 1)] = "Documentary"
+genre[which(count == 1 & movies$Romance == 1)] = "Romance"
+genre[which(count == 1 & movies$Short == 1)] = "Short"
+genre[which(count > 1)] = "Mixed"
+movies$genre<-as.factor(genre)
+ggplot(movies)+geom_bar(aes(x= genre),fill="#9922CC") +  
+labs(title = "Genre by Count", x =  "Genre", y = "Count")
+```
+\newpage
+# Question 6
+ The barplot displays the average rating of all movies by genre. 
+```{r fig.align="center"}
+ggplot(movies, aes(x= genre, y=rating)) + 
+  stat_summary(fun.y="mean", geom="bar", 
+  fill = c('blue','purple','orange','yellow','green', 'red', '#0011DD','#9911EE','#1111AA')) + labs(title = "Genre by Ratings for Movies Released", x = "Ratings", y = "Frequency")
+
+```
+\newpage
+# Question 7
+ The graph displays the average movie ratings for movies released between years 2000-2005. 
+```{r fig.align="center"}
+movies_00_05 <- subset(movies, 2000 <= year & year <= 2005, select = year:genre)
+ggplot(movies_00_05, aes(x= genre, y=rating)) + stat_summary(fun.y="mean",
+                                                             geom="bar", 
+               fill = c('blue','purple','orange','yellow','green', 'red', '#0011DD','#9911EE', '#2233CC')) + 
+  labs(title = "Genre by Ratings for Movies Released Between 2000-2005", 
+       x = "Ratings", y = "Frequency")
+```
+\newpage
+# Question 8 
+  The plot shows the frequency of movies being released in each genre by year. 
+```{r fig.align="center"}
+movies_1990on <- subset(movies, 1990 <= year & genre!= "Mixed", select = year:genre)
+movies_1990on %>%
+  filter(year>=1990, genre!= "Short" & genre!= "None") %>%
+  count(year,genre) %>%
+  ggplot(aes(x=  year, y= n, color = genre, group = genre)) +geom_line() + 
+  labs(title = " Movies Released after 1990 Count by Genre", 
+       x = "Ratings", y = "Number of Movies Released")
+
+```
+\newpage
+# Question 9 
+  (Q1) Do movies with larger budgets have better ratings? What does the distribution of movies' ratings and budgets look like?
+
+```{r fig.align="center"}
+ggplot(movies, aes(x = budget, y = rating, group = rating)) + geom_line() 
+```
+## This distribution is strongly skewed towards movies with larger budgets having higher ratings. 
+
+
+(Q2) How does a movie's budget correlate to the its genre? Does that change for movies before 1949? After 1949? (Half-way point of range of years of movies)
+```{r}
+moviesaft49 <- subset(movies, 1949 <= year)
+moviesbef49 <- subset(movies, year <= 1949)
+lm(budget~ Action + Animation + Comedy + Documentary + Drama + Romance , data = movies)
+lm(budget~ Action + Animation + Comedy + Documentary + Drama + Romance , data = moviesbef49)
+lm(budget~ Action + Animation + Comedy + Documentary + Drama + Romance , data = moviesaft49)
+```
+##It appears that all movies  of all years have a mean budget of $6,895,541 with Documentaries having a mean budget of around -$6,871,297 less than that at the lowest mean-budget. All other movie budgets are far above this mean considering that Documentary budgets are skewing it downward. The Movies with the most expensive mean budget are Action movies with a mean-budget of $21,832,609 greater than that of the mean of all movie genres. Naturally, the mean budget of movies before 1949 are nominally less than after 1949 due to inflation and technological differences. Before 1949 the mean-budget of Romance is the genre with the largest mean budget and After 1949 the genre with the largest mean-budget is Animation at $23,253,429
+
+##(Q3) How does length correspond to the ratings broken down by genres? Plot every genre's rating as a function of length. 
+```{r fig.align="center"}
+ggplot(data = movies, aes(x = length, y = rating, col=genre)) + geom_point(alpha=0.5) + 
+  geom_smooth(method = "lm" )+facet_wrap(~genre,ncol=3)+coord_cartesian(xlim=c(0,300))+
+  labs(title = "Length and Rating", x = "Length", y = "rating")
+
+```
+
+## This plot suggests that an increase in rating is correlated with an increase in length for all genres where the line of best fit is positive. This is specifically true for Action, Comedy, Drama, Romance and Movies with no assigned genre. It is unclear what the relationship is for Animation, Documentary, or Short movies. In other words there likely is no significant associated differences in ratings for comparably longer and shorter movies of these genres. 
+
