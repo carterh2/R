@@ -1,0 +1,116 @@
+---
+title: 'Homework 3: Simple Linear Regression Model with Icecream'
+author: "Carter Hogan"
+font-family: 'Helvetica'
+date: "3/26/2020"
+output: ioslides_presentation
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, render = 'normal_print')
+df = read.csv( file ="/Users/carterhogan/Data in R/Icecream.csv",sep=",",header=TRUE)
+attach(df)
+library(ggplot2)
+library(plotly)
+library(jtools)
+library(kableExtra)
+library(tidyverse)
+```
+
+## Simple Linear Model 
+- In a simple linear regression  model there is only one independent variable, usually characterized as 'x'
+- Always one dependent variable usually characterized as 'y' 
+- It describes the relationship between 'x' and 'y' as a linear function 
+- '$\epsilon$' is the random error component
+- '$\beta_{0}+ \beta_{1}x_{1}$' is the linear component 
+- $y_i = \beta_{0}+ \beta_{1}x_{1} + \epsilon_i$ is the full function
+
+## Relationship of Icecream and Temperature 
+
+- As an example of a statistical relationship, we will look at how ice cream consumption changes with increases in temperature
+- The plot on the next slide is just one method of analyzing this relationship but wouldn't it be interesting to see just how much consumption changes with respect to the temperature?
+- The Model would look like this $Ice Cream Consumption_{i} = \beta_{0}+\beta_{1}Temperature + \epsilon_{i}$
+
+## Scatter Plot of Relationship using ggplot
+```{r, echo=FALSE}
+slm <- lm(cons~temp)
+predicted_df <- data.frame(consumption = predict(slm, df))
+ggplot(data = df, aes(x = temp, y = cons)) + 
+  geom_point(color='blue') +
+  geom_line(color='red',data = predicted_df, aes(x=temp, y=cons)) +
+  labs(title = "Scatterplot of Ice Cream Consumption and Temperature", 
+       x = "Temperature", y = "Consumption of Ice Cream")
+
+
+```
+
+## Simple Linear Regression Model as Tool
+```{r, echo = FALSE}
+slm <- lm(cons~temp)
+summary(slm)
+```
+
+## Interpreting the Results: Writing down the equation and p-values
+- $ICConsumption= 0.2068621 + 0.0031074Temp$
+- Victor De Gruttola has a concise definition of p-values 
+- def: "In statistical hypothesis testing, the p-value is the probability of obtaining a test statistic at least as extreme as the one that was actually observed, assuming that the null hypothesis is true."
+- p values are used in simple linear regression to determine how correlated the variation between variables is.
+- We say they determine the 'significance' of variable. If a variable has a p-value larger than .1 is said to have little to no significance and would probably be thrown out during analysis.
+
+## Interpreting the Results p-values continued
+- As can be seen in the previous slide temperature is significantly correlated with ice cream consumption with a p- value < .001
+- We would say temperature is significant at the .05, .01 and .001 significance levels. (This is noted with *** for the 'summary' function)
+
+## Interpreting the Results: R-Squared 
+- R-Squared tells us the proportion of variation in the dependent variable that has been explained by the linear model
+- For example, temperature explains .6016 of the variation in Ice Cream consumption
+- The formula for R-Squared is as follows
+- $R^2 = 1 - SSE/SST$ where SSE is the _sum of squared errors_ $SSE = \sum_{i}^{n} (y_i-\hat{y_i})^2$ and where SST is the _sum of squared total_ $SST = \sum_{i}^{n} (y_i-\overline{y_i})^2$. $\hat{y_i}$ is the fitted value for observation "i" and $\overline{y_i}$ is the mean of y. 
+
+## Interpreting the Results: Adjusted R-Squared 
+- Adjusted R-Squared accounts for how many variables are in the model
+- The  following formula adjusts for it as followswhere "n" is the number of observations and "q" is the number of coefficients in the model.
+- $R_{adj}^2 = 1 - MSE/MST$ where MSE is the _mean squared error_  where $MSE = SSE/(n-q)$ and MST is the _mean squared total_ where $MST = SST/(n-1)$
+
+## R Code for following Boxplot 
+```{r, echo = TRUE, results=FALSE, eval = FALSE}
+incomecat<- rep(NA, nrow(df))
+incomecat[90 <= income ] <- "High Income"
+incomecat[83 <= income & income < 90] <- "Middle Income"
+incomecat[76 <= income & income < 83] <- "Low Income"
+ggplot(data = df ,aes(x = cons, y = incomecat)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Ice Cream Consumption and Income", 
+       x = "Consumption of Ice Cream", y = "Income")
+      
+```
+
+
+## Analyzing relationships of variables : Income
+```{r, echo = FALSE}
+incomecat<- rep(NA, nrow(df))
+incomecat[90 <= income ] <- "High Income"
+incomecat[83 <= income & income < 90] <- "Middle Income"
+incomecat[76 <= income & income < 83] <- "Low Income"
+ggplot(data = df ,aes(x = cons, y = incomecat)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Ice Cream Consumption and Income", x = "Consumption of Ice Cream", y = "Income")
+      
+
+```
+
+## 3D Scatterplot using Plotly
+```{r , echo = FALSE}
+fig <- plot_ly(x = temp , y = cons, z = income, color = cons, colors = c('#BF382A'))
+fig <- fig %>% add_markers()
+fig <- fig %>% layout(scene = list(xaxis = list(title = 'Temperature'),
+                     yaxis = list(title = 'Consumption of Ice Cream (as % of Income)'),
+                     zaxis = list(title = 'Income'))) 
+fig
+```
+
+## Interpreting these plots 
+- The boxplot suggests that those with higher levels of income on average spend more on ice cream, but only for those in the lower and higher income categories. Individuals classified as "Middle Income" actually have a significantly lower consumption average. 
+- The 3D plotly graph illustrates that the Consumption of Ice Cream is closely tied to the Income of the individual and the current weather. The relationship is very clearly linear and ascending. 
+- As shown in these slides, a SLM can be a highly useful tool for analyzing linear relationships between variables. The p-values and R-squared values can help you decipher the significance of said variables, but as with anything so simplistic it is not always accurate and it is important to keep in mind that SLM's don't imply causation, only correlation. 
+
+

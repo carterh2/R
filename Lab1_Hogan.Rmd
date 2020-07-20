@@ -1,0 +1,98 @@
+---
+title: "Lab 1 : Absenteeism at Work"
+author: "Carter Hogan"
+date: "2/14/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+df = read.csv(file = "/Users/carterhogan/Desktop/Lab 1 folder/Absenteeism_at_work.csv", 
+              sep = ';', 
+              header = TRUE)
+library(dplyr)
+```
+
+
+```{r Probelm 1}
+# Code for the first plot
+weight <- df$Weight
+height <- df$Height
+plot(weight, height, ylab = "Height", 
+     xlab = "Weight", 
+pch = 16, col = "black", 
+main =" Height VS Weight of Workers")
+```
+The relationshio between Weight and Height of workers is not clear, as there is a somewhat linear line of best fit that could be drawn through the observations, but it would not predict weight according to height with much accuracy.
+\newpage
+
+```{r Problem 2}
+# Code For the second plot
+absenthours <- df$Absenteeism.time.in.hours
+hist(absenthours, 
+     xlab = "Absenteeism in Hours", 
+main = "Histogram of Absenteeism in Hours", 
+ylab = "Total Number of Absences",
+breaks = 12, col ="purple")
+```
+The total number of absencesin hours is concentrated at 0-20 hours for the majority of observations with decreasing frequency up to about 40 hours. Then there is a minor increase in frequency from 40-60 hours of absence, and another minor increase from 100-120 hours. 
+\newpage
+
+```{r Problem 3}
+# Code For the third plot
+age <- df$Age
+hist(age, xlab = "Absenteeism by Age", 
+     ylab = "Total Number of Absences", 
+     main = "Histogram of Absenteeism by Age", 
+breaks = 12, col = topo.colors(12))
+```
+Not much can be drawn about the correlation between the age of an employee and total number of absences because there is a large variation in total number of absences within 5 year differences in age. For example, 35-40 year old employees have an average of more than 150 total number of absences compared to 30-35 year old who are well under an average of 100 total absences. It appears that the total number of absences decreases as age increases over forty years old with minor increases from 45-50. 
+\newpage
+
+```{r Problem 4}
+# Code for the fourth plot
+df$Month.of.absence <- recode_factor(df$Month.of.absence, 
+'1'="Jan", '2' = "Feb", '3'="March",
+'4'="April",'5' ="May", '6'="June",'7'="July",
+'8'="August",'9'="Sep",'10'="Oct", 
+'11'="Nov", '12'="Dec",'0'="NA")
+absentmonth <- tapply(X = df$Absenteeism.time.in.hours, 
+INDEX= df$Month.of.absence, FUN=sum)
+absentmonth<- absentmonth[absentmonth!= 0]
+barplot(absentmonth, xlab = "Months",
+ylab = "Total Absent Hours", 
+main = "Barplot of Total Absent Hours by Month", 
+col = topo.colors(length(absentmonth)))
+
+```
+The most total absent hours occurred in March and the second most occurred in July. The least amount of absent hours occurred in January with the rest of the months hovering between a range of 200-500 total absent hours. 
+\newpage
+
+```{r Problem 5}
+# Code for the fifth plot
+socialsmkr <- df$Social.smoker
+absenttimehourssmkr <- subset(sqrt(df$Absenteeism.time.in.hours), 
+                              socialsmkr == '1')
+absenttimehoursnonsmkr <- subset(sqrt(df$Absenteeism.time.in.hours), 
+                                 socialsmkr == '0')
+boxplot(absenttimehourssmkr, absenttimehoursnonsmkr, 
+        ylab = " Square Root of Absent Hours", 
+        main = "Boxplot of Absent Hours of Social Smokers vs Non Smokers",
+        col = c("blue", "yellow"), names = c("Social Smoker", "Non-Smoker"))
+```
+This boxplot would suggest that social smokers have a higher median frequency of total absent hours, but Non-Smokers have many more outliers that have more total absent hours than the upper quartile of Non-Smokers and even the outliers of Social-Smokers.
+\newpage
+
+```{r Problem 6}
+# Code for the sixth plot 
+drinks <- df$Social.drinker
+absenttimehoursdrnkr <- subset(sqrt(df$Absenteeism.time.in.hours), 
+                               drinks == '1')
+absenttimehoursnondrnkr <- subset(sqrt(df$Absenteeism.time.in.hours), 
+                                  drinks == '0')
+boxplot(absenttimehourssmkr, absenttimehoursnonsmkr, 
+        ylab = "Square Root of Absent Hours", 
+        main = "Boxplot of Absent Hours of Social Drinkers vs Non Drinkers", 
+        col = c("green", "red"), names = c("Social Drinker", "Non-Drinker"))
+```
+This boxplot would suggest that Non-Drinkers have a slightly lower mean of total absent hours relative to Social drinkers, but they have more outliers that have greater total absent hours. A similar relationship can be seen in the previous plot with non-smokers and smokers.
