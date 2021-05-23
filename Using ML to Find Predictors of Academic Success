@@ -1,0 +1,171 @@
+library(readr)
+library(kknn) 
+library(glmnet)
+library(tree)
+library(rpart)
+library(rpart.plot)
+library(h2o)
+library(nnet)
+source("http://www.rob-mcculloch.org/2021_dt/webpage/notes/do-stepcv.R") 
+# set seed
+set.seed(99)
+# read in the data and join the two data sets
+d1 <- read_delim("student-mat.csv",";", escape_double = FALSE, trim_ws = TRUE)
+d2<- read_delim("student-por.csv",";", escape_double = FALSE, trim_ws = TRUE)
+d3 = rbind(d1,d2)
+#d3=merge(d1,d2,by=c("school","sex","age","address","famsize","Pstatus","Medu","Fedu","Mjob","Fjob","reason","nursery","internet"))
+# turn binary "yes", "no" to numeric
+d3$sex<-ifelse(d3$sex=="M",1,0)
+d3$internet<-ifelse(d3$internet=="yes",1,0)
+d3$schoolsup<-ifelse(d3$schoolsup=="yes",1,0)
+d3$famsup<-ifelse(d3$famsup=="yes",1,0)
+d3$paid<-ifelse(d3$paid=="yes",1,0)
+d3$activities<-ifelse(d3$activities=="yes",1,0)
+d3$nursery<-ifelse(d3$nursery=="yes",1,0)
+d3$higher<-ifelse(d3$higher=="yes",1,0)
+d3$romantic<-ifelse(d3$romantic=="yes",1,0)
+d3$famsize <-ifelse(d3$famsize=="GT3",1,0)
+d3$Pstatus <-ifelse(d3$Pstatus == "A",1,0)
+
+# subset the data for numeric variables as predictors of student performance
+d4 = subset(d3, select = c("sex","Medu","Fedu","traveltime","studytime","failures","schoolsup","famsup","paid","activities","nursery","higher","internet","romantic","famrel","freetime","goout","Dalc","Walc","health","absences","age", "famsize","Pstatus","G3"))
+# train, test split 
+dt = sort(sample(nrow(d4), nrow(d4)*.7))
+train<-d4[dt,]
+test<-d4[-dt,]
+#loop over values of k, fit on train, predict on test
+kvec=2:100; nk=length(kvec)
+outMSE = rep(0,nk) #will put the out-of-sample MSE here
+for(i in 1:nk) {
+  near = kknn(G3~.,train,test,k=kvec[i],kernel = "rectangular")
+  MSE = test[,25]-near$fitted.values
+  MSE1 = mean(MSE$G3)^2
+  outMSE[i] = MSE1
+}
+# had to put the outMSE into a data frame
+df = data.frame(outMSE)
+#plot
+par(mfrow=c(1,2))
+plot(kvec,sqrt(df[,1]))
+plot(log(1/kvec),sqrt(df[,1]))
+imin = which.min(df$outMSE)
+cat("best k is ",kvec[imin], "and best outMSE is", min(df$outMSE), "\n")
+#fit with all data and best k and plot)
+near = kknn(G3~.,d4,test,k=kvec[imin],kernel = "rectangular")
+par(mfrow=c(1,1))
+print(cor(d4$G3,near$fitted.values))
+#plot looks possibly overfit
+#linear plot
+mod <- lm(G3~., d4)
+summary(mod)
+plot(mod)
+# Let's Fit all three Ridge, Lasso and then Enets
+d5 <- as.matrix(d4)
+y <- d5[,25]
+x <- d5[,1:24]
+n=length(y)
+nfold=10
+set.seed(99)
+fid1 =  getfolds(nfold,n)
+
+#lasso
+cvdgnL = cv.glmnet(x,y,nfolds=10,foldid=fid1,family="gaussian",standardize=FALSE,alpha=1,intercept=FALSE)
+#ridge
+cvdgnR = cv.glmnet(x,y,nfolds=10,foldid=fid1,family="gaussian",standardize=FALSE,alpha=0,intercept=FALSE)
+#enet
+cvdgnE = cv.glmnet(x,y,nfolds=10,foldid=fid1,family="gaussian",standardize=FALSE,alpha=.5,intercept=FALSE)
+
+# Plot all three together
+cvmL = cvdgnL$cvm; lmL = cvdgnL$lambda
+cvmR = cvdgnR$cvm; lmR = cvdgnR$lambda
+cvmE = cvdgnE$cvm; lmE = cvdgnE$lambda
+plot(range(log(c(lmL,lmR,lmE))),range(sqrt(c(cvmL,cvmR,cvmE))),xlab="lambda",ylab="loss",cex.axis=1.5,cex.lab=1.5)
+lines(log(lmL),sqrt(cvmL),col="red",type="b",lwd=2)
+lines(log(lmL),sqrt(cvdgnL$cvlo),col="red",lty=3,type="l");lines(log(lmL),sqrt(cvdgnL$cvup),col="red",lty=3,type="l")
+lines(log(lmR),sqrt(cvmR),col="blue",type="b",lwd=2)
+lines(log(lmR),sqrt(cvdgnR$cvlo),col="blue",lty=3,type="l");lines(log(lmR),sqrt(cvdgnR$cvup),col="blue",lty=3,type="l")
+lines(log(lmE),sqrt(cvmE),col="magenta",type="b",lwd=2)
+lines(log(lmE),sqrt(cvdgnE$cvlo),col="magenta",lty=3,type="l");lines(log(lmE),sqrt(cvdgnE$cvup),col="magenta",lty=3,type="l")
+legend("topright",legend=c("lasso","ridge","enet"),col=c("red","blue","magenta"),lwd=c(2,2,2),cex=1)
+
+# Maybe lets take a look at trees
+set.seed(99)
+big.tree = rpart(G3~.,method="anova",data=d4,control=rpart.control(minsplit=5,cp=.0005))
+nbig = length(unique(big.tree$where))
+cat("size of big tree: ",nbig,"\n")
+#which size tree is the best
+plotcp(big.tree)
+# plot the best tree
+iibest = which.min(big.tree$cptable[,"xerror"]) #which has the lowest error
+bestcp=big.tree$cptable[iibest,"CP"]
+bestsize = big.tree$cptable[iibest,"nsplit"]+1
+#prune
+#prune to good tree
+best.tree = prune(big.tree,cp=bestcp)
+nbest = length(unique(best.tree$where))
+cat("size of best tree: ", nbest,"\n")
+
+plot(best.tree,uniform=TRUE)
+text(best.tree,digits=4,use.n=TRUE)
+rpart.plot(best.tree,split.cex=1.0,cex=1.3,type=3,extra=0)
+
+# get prediction
+yhat = predict(best.tree)
+plot(d4$G3,yhat)
+abline(0,1,col="red",lwd=3)
+#let's try bagging
+oo=order(d4$G3)
+ddf = d4[oo,]
+
+#bootstrap loop
+B=200
+n=nrow(ddf)
+nn = rep(0,B)
+fmat=matrix(0,n,B)
+set.seed(99)
+
+par(mfrow=c(1,2))
+for(i in 1:B) {
+  ii = sample(1:n,n,replace=TRUE)
+  nn[i] = length(unique(ii))
+  bigtree = tree(G3~.,ddf[ii,],mindev=.0002)
+  #print(length(unique(bigtree$where)))
+  temptree = prune.tree(bigtree,best=30)
+  #print(length(unique(temptree$where)))
+  fmat[,i]=predict(temptree,ddf)
+  
+  #plot(ddf$G3~ddf$absences)
+  iiu = unique(ii)
+  nu = length(iiu)
+  nvec=rep(0,nu)
+  #for(j in 1:nu) nvec[j] = sum(ii == iiu[j])
+ # points(ddf$G3[iiu],ddf$G2[iiu],col="red",pch=5,cex=nvec)
+  #lines(ddf$G3,fmat[,i],col=i,lwd=2)
+  plot(temptree,type="uniform")
+  if((i%%100)==0) {
+    cat('i: ',i,'\n')
+    print(table(nvec))
+  }
+}
+#Standardize the data
+scd4<- data.frame(scale(d4))
+d4nn = nnet(G3~.,scd4,size=20,decay=.1,linout=T)
+fd4nn = predict(d4nn,scd4)
+summary(d4nn)
+#Compare neural net to linear model
+d4lm = lm(G3~.,scd4)
+fd4lm = predict(d4lm,scd4)
+temp = data.frame(y=scd4$G3,fnn=fd4nn,flm=fd4lm)
+pairs(temp)
+#correlation between Final Test Score and neural net
+print(cor(temp$y,temp$fnn)^2)
+#correlation between Final Test Score and linear model
+print(cor(temp$y,temp$flm)^2)
+#correlation between neural net and linear model
+print(cor(temp$fnn,temp$flm)^2)
+
+#begin h2o instance
+library(h2o)
+h2o.init(o)
+d4_h2o <- as.h2o(d4)
+
